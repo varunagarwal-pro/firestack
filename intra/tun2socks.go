@@ -254,6 +254,48 @@ func LowMem(limitBytes int64) {
 	log.I("tun: lowmem; limits => new: %d, prev: %d", limitBytes, prevLimit)
 }
 
+// PeekTrace returns a log trace for key, if any, as a byte slice.
+func PeekTrace(id string) []byte {
+	s := log.GetAllStr(id)
+	if s == nil {
+		return nil
+	}
+
+	l := s.Get()
+	if l == nil {
+		return nil
+	}
+
+	var out []byte
+	for _, line := range *l {
+		if line == nil {
+			out = append(out, []byte("<nil>\n")...)
+		} else {
+			out = append(out, line...)
+			out = append(out, '\n')
+		}
+	}
+	return out
+}
+
+// Traces returns all live log traces, with stores in creation order and
+// lines oldest first. Each recorded line is followed by a newline.
+func Traces() []byte {
+	return log.PeekAllTraces()
+}
+
+// TraceCount returns the current number of live per-key log traces.
+func TraceCount() int {
+	return log.TraceCount()
+}
+
+// ExtractTrace is like [PeekTrace] but in addition also frees up the memory backing
+// the log trace, if any.
+func ExtractTrace(id string) []byte {
+	defer log.ReleaseStr(id)
+	return PeekTrace(id)
+}
+
 // Slowdown sets the TUN forwarder in single-threaded mode.
 func Slowdown(y bool) {
 	ok := settings.SingleThreaded.CompareAndSwap(!y, y)
