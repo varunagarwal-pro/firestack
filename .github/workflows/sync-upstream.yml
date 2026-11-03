@@ -1,0 +1,59 @@
+name: 🔄 Sync Upstream & Merge firestack
+
+on:
+  schedule:
+    # Runs daily at 04:00 UTC (09:30 IST)
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: firestack-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-and-merge:
+    name: Sync Upstream -> n2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: n2
+          token: ${{ secrets.SYNC_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git Identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Configure Upstream Remote
+        run: |
+          git remote add upstream https://github.com/celzero/firestack.git || true
+          git fetch upstream n2 --tags
+
+      - name: Stage 1 - Fast-Forward upstream-mirror Branch
+        run: |
+          set -euo pipefail
+          git checkout -B upstream-mirror upstream/n2
+          git push origin upstream-mirror --force
+
+      - name: Stage 2 - Merge Upstream Mirror into n2 (Preserving Customizations)
+        run: |
+          set -euo pipefail
+          git checkout n2
+          echo "Merging upstream-mirror into n2 with -X ours fallback..."
+          if git merge upstream-mirror -m "chore(sync): automated merge from upstream-mirror into n2"; then
+            echo "Clean merge succeeded."
+          else
+            echo "Conflicts encountered; resolving with -X ours..."
+            git merge --abort || true
+            git merge upstream-mirror -X ours -m "chore(sync): automated merge with firestack customizations preference"
+          fi
+
+      - name: Stage 3 - Push Verified n2 to GitHub
+        run: |
+          git push origin n2
