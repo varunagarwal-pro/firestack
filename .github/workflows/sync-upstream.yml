@@ -41,17 +41,21 @@ jobs:
           git checkout -B upstream-mirror upstream/n2
           git push origin upstream-mirror --force
 
-      - name: Stage 2 - Merge Upstream Mirror into n2 (Preserving Customizations)
+      - name: Stage 2 - Attempt Clean Merge from upstream-mirror
+        id: merge_step
         run: |
           set -euo pipefail
           git checkout n2
-          echo "Merging upstream-mirror into n2 with -X ours fallback..."
-          if git merge upstream-mirror -m "chore(sync): automated merge from upstream-mirror into n2"; then
-            echo "Clean merge succeeded."
+          echo "Attempting clean merge from upstream-mirror into n2..."
+          if git merge upstream-mirror -m "chore(sync): automated clean merge from upstream-mirror into n2"; then
+            echo "Clean merge succeeded with zero conflicts."
           else
-            echo "Conflicts encountered; resolving with -X ours..."
-            git merge --abort || true
-            git merge upstream-mirror -X ours -m "chore(sync): automated merge with firestack customizations preference"
+            echo "::warning::Merge conflicts detected between upstream-mirror and n2!"
+            echo "Halting merge to prevent silently discarding upstream changes or overwriting local customizations."
+            git merge --abort
+            echo "### ⚠️ Upstream Sync Conflict Alert" >> "$GITHUB_STEP_SUMMARY"
+            echo "New upstream changes conflict with local customizations. Upstream-mirror has been updated safely, but manual review is required for n2." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
 
       - name: Stage 3 - Push Verified n2 to GitHub
