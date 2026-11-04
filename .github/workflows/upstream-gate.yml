@@ -1,0 +1,29 @@
+name: Upstream gate
+
+# Runs on sync/upstream-* pull requests opened by the Sentinel-Labs fleet engine.
+# The engine never pushes to n2; a human merges the PR once this gate is green.
+on:
+  pull_request:
+    branches: [n2]
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    if: startsWith(github.head_ref, 'sync/upstream-')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - name: Modules verify
+        run: go mod verify
+      - name: Compile everything
+        run: go build ./...
+      - name: WireGuard dependency must stay pinned
+        run: |
+          grep -Eq '^\s*golang\.zx2c4\.com/wireguard v[0-9]+\.[0-9]+\.[0-9]+-[0-9]{14}-[0-9a-f]{12}' go.mod \
+            || { echo "::error::golang.zx2c4.com/wireguard is no longer pinned to a commit in go.mod"; exit 1; }
